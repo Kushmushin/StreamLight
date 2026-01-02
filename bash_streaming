@@ -1,0 +1,461 @@
+#! usr/bin/bash
+
+#Written by Kushmushin. Not for Sale. Not for reproduction... And all that...
+#Use this to enter the streaming game if you've fallen behind in the tech a bit...
+
+#Follow me on Youtube, Twitch, and Kick. All under Kushmushin.
+#All I want in return is a like, a subscribe, and a follow. Help me get a new computer setup!
+
+#///////////SETUP\\\\\\\\\\\\\
+
+#These all are tested with my Debian system. I imagine it should work on any linux system.
+#Add the following to your .bashrc file in your $HOME dir. The spot for it is near the bottom.
+
+#if [ -f ~/.bash_streaming ]; then
+#    . ~/.bash_streaming
+#fi
+
+#Keep your keys and RTMP urls in a separate .env file. That should look like this:
+
+#export YOUTUBE_KEY="SECRETKEY"
+#...
+#...
+#export YOUTUBE_RTMP="RTMP_URL"
+#...
+#...
+
+#Just do it for each key. Three keys, three urls, etc.
+#The .env should be in a separate dir, probably your .config directory.
+#Want to lock it to your user? In your terminal run:
+# chmod 600 ~/.config/stream_keys.env
+
+#NOTES:
+  #This is basically bare bones OSB of my own making.
+  #I'm trying to keep quality up, yet sacrifices are to be made.
+  #If you don't have figlet, or lolcat, just apt install them. Or erase where you see them.
+  #Set your resolutions. My monitor is 1600x900, so I work with that. Math is involved.
+  #Image input is your bluescreen image. Keep it to exact size of your webcam, and a jpeg.
+  #If you're not using a bluescreen, just ask ChatGPT to take it out.
+  #I use my webcam, and a separate microphone.
+  #So use 'pactl list short sources' to find them! I'm using Pulse audio.
+  #apt install pavucontrol, if you want to boost your mic.
+  #adelay is set to 2000 each. For audio sync, adjust 1000-2000ish. Run tests. CPU dependant.
+  #I have five inputs 0-4. Just be aware of the flow.
+  #Any other tweaks are up to you.
+
+#-------------------------------------------------------------------------//////////
+#----------------------------------------------------------////////// Base Functions
+#-------------------------------------------------------------------------//////////
+
+function streamfunctions() {
+     grep '^function ' ~/.bash_streaming | awk '{print $2}' | sed 's/()//' | sort
+}
+
+#-------------------------------------------------------------------------//////////
+#-------------------------------------------------------------////////// Cam Testing
+#-------------------------------------------------------------------------//////////
+
+#This opens your webcam in a new window.
+function campipe() {
+	ffplay -loglevel quiet -framerate 24 -video_size 640x480 /dev/video0
+}
+
+#-------------------------------------------------------------------------//////////
+#-------------------------------------------------////////// Youtube Short Recording
+#-------------------------------------------------------------------------//////////
+
+#This records your desktop in a Youtube Short format. NO AUDIO!
+function shortmaker() {
+  OUTPUT="$HOME/Videos/shortmaker$(date +%Y%m%d_%H%M%S).mp4"
+
+  figlet -f smslant "Recording..." | lolcat
+  sleep 1
+
+  ffmpeg \
+    -loglevel quiet \
+    -thread_queue_size 128 \
+    -f x11grab \
+    -framerate 20 \
+    -video_size 720x900 \
+    -i :0.0+440,0 \
+    -vf "scale=720:900:force_original_aspect_ratio=decrease,pad=720:1280:0:(1280-900)/2:black" \
+    -an \
+    -c:v libx264 \
+    -preset veryfast \
+    -pix_fmt yuv420p \
+    -b:v 2500k \
+    -maxrate 2500k \
+    -bufsize 5000k \
+    -g 60 \
+    -level 4.1 \
+    -movflags +faststart \
+    "$OUTPUT"
+
+  clear
+  figlet -f small "Recording Over" | lolcat
+  sleep 1
+  clear
+}
+
+#This records your desktop in a Youtube Short format. SYSTEM AUDIO! NO MICROPHONE!
+function shortmaker_systemaudio() {
+  OUTPUT="$HOME/Videos/shortmaker_systemaudio$(date +%Y%m%d_%H%M%S).mp4"
+
+  figlet -f smslant "Recording..." | lolcat
+  sleep 1
+
+  ffmpeg \
+    -loglevel quiet \
+    -thread_queue_size 256 \
+    -f x11grab \
+    -framerate 30 \
+    -video_size 720x900 \
+    -i :0.0+440,0 \
+    -thread_queue_size 256 \
+    -f pulse \
+    -ar 48000 \
+    -i alsa_output.pci-0000_00_1b.0.analog-stereo.monitor \
+    -vf "scale=720:900:force_original_aspect_ratio=decrease,pad=720:1280:0:(1280-900)/2:black" \
+    -map 0:v \
+    -map 1:a \
+    -c:v libx264 \
+    -preset fast \
+    -crf 20 \
+    -pix_fmt yuv420p \
+    -profile:v high \
+    -level 4.1 \
+    -g 60 \
+    -c:a aac \
+    -b:a 128k \
+    -ar 44100 \
+    -ac 2 \
+    -movflags +faststart \
+    "$OUTPUT"
+
+  clear
+  figlet -f small "Recording Over" | lolcat
+  sleep 1
+  clear
+}
+
+#This records your desktop in a Youtube Short format. SYSTEM and MICROPHONE AUDIO!
+function shortmaker_fullaudio() {
+  OUTPUT="$HOME/Videos/shortmaker_fullaudio$(date +%Y%m%d_%H%M%S).mp4"
+
+  figlet -f smslant "Recording..." | lolcat
+  sleep 1
+
+  ffmpeg \
+    -loglevel quiet \
+    -thread_queue_size 256 \
+    -f x11grab \
+    -framerate 30 \
+    -video_size 720x900 \
+    -i :0.0+440,0 \
+    -thread_queue_size 256 \
+    -f pulse \
+    -ar 48000 \
+    -thread_queue_size 512 -f pulse -ar 48000 -i alsa_output.pci-0000_00_1b.0.analog-stereo.monitor \
+    -thread_queue_size 512 -f pulse -ar 48000 -i alsa_input.usb-Burr-Brown_from_TI_USB_Audio_CODEC-00.analog-stereo \
+    -filter_complex "
+      [0:v]scale=720:900:force_original_aspect_ratio=decrease,
+           pad=720:1280:0:(1280-900)/2:black[v];
+      [1:a]volume=1.0[a_sys];
+      [2:a]adelay=2000|2000,
+            pan=stereo|c0=c0|c1=c0,
+            volume=1.4[a_mic];
+      [a_sys][a_mic]amix=inputs=2:dropout_transition=0[a]
+    " \
+    -map "[v]" \
+    -map "[a]" \
+    -c:v libx264 \
+    -preset fast \
+    -crf 20 \
+    -pix_fmt yuv420p \
+    -profile:v high \
+    -level 4.1 \
+    -g 60 \
+    -c:a aac \
+    -b:a 128k \
+    -ar 44100 \
+    -ac 2 \
+    -movflags +faststart \
+    "$OUTPUT"
+
+  clear
+  figlet -f small "Recording Over" | lolcat
+  sleep 1
+  clear
+}
+
+#-------------------------------------------------------------------------//////////
+#---------------------------------------------------////////// Desktop/Webcam Stream
+#-------------------------------------------------------------------------//////////
+
+#Replace the KEY and RTMP lines underneath for Youtube, Twitch, and Kick, with -
+
+  #local YOUTUBE_KEY="YOUR KEY"
+  #local YOUTUBE_RTMP="RTMP URL"
+
+  #For security reasons, I export them from a separate file.
+  #Thats what you see under this.
+  #Don't leak your keys!
+  #Don't leak your keys!
+  #Don't leak your keys!
+
+
+#Let me be real here. This Youtube script works like 50% of the time.
+#YT is real B. Its hit or miss whether it wants to catch the feed.
+#The Kick and Twitch work real well.
+#I suggest recording using the other functions, then upoading to YT, rather than stream...
+#Or stream to Twitch, then download it and post it to YT. Either or.
+#I'll figure it out later.
+
+function youtube_pip() {
+
+  : "${YOUTUBE_KEY:?YOUTUBE_KEY not set}"
+  : "${YOUTUBE_RTMP:?YOUTUBE_RTMP not set}"
+
+  figlet -f smslant "Youtube" | lolcat
+  sleep 1
+
+  ffmpeg \
+    -loglevel quiet \
+    -thread_queue_size 512 -f v4l2 -framerate 20 -video_size 320x240 -i /dev/video0 \
+    -thread_queue_size 512 -f x11grab -framerate 20 -video_size 1280x720 -i :0.0+150,90 \
+    -thread_queue_size 128 -loop 1 -i "$HOME/Pictures/bg_main.jpg" \
+    -thread_queue_size 512 -f pulse -ar 48000 -i alsa_output.pci-0000_00_1b.0.analog-stereo.monitor \
+    -thread_queue_size 512 -f pulse -ar 48000 -i alsa_input.usb-Burr-Brown_from_TI_USB_Audio_CODEC-00.analog-stereo \
+    -filter_complex "
+    [1:v]scale=-1:720:force_original_aspect_ratio=decrease,
+         pad=1280:720:(ow-iw)/2:(oh-ih):color=black[desk];
+    [0:v]scale=320x240,
+         chromakey=0x384b81:0.05:0.05[cam_keyed];
+    [2:v]scale=320x240[bg];
+    [bg][cam_keyed]overlay=0:0[cam_final];
+    [desk][cam_final]overlay=W-w-0:0[v];
+    [3:a]volume=1.0[a_sys];
+    [4:a]adelay=2000|2000,
+          pan=stereo|c0=c0|c1=c0,
+          volume=1.4[a_mic];
+    [a_sys][a_mic]amix=inputs=2:dropout_transition=0[a]
+    " \
+    -map "[v]" \
+    -map "[a]" \
+    -c:v libx264 \
+    -preset veryfast \
+    -pix_fmt yuv420p \
+    -b:v 2500k \
+    -g 60 \
+    -c:a aac \
+    -b:a 160k \
+    -ar 48000 \
+    -ac 2 \
+    -movflags +faststart \
+    -f flv -flvflags no_duration_filesize "$YOUTUBE_RTMP/$YOUTUBE_KEY"
+
+  clear
+  figlet -f small "Stream Over" | lolcat
+  sleep 1
+  clear
+}
+
+
+
+function twitch_pip() {
+  : "${TWITCH_KEY:?TWITCH_KEY not set}"
+  : "${TWITCH_RTMP:?TWITCH_RTMP not set}"
+
+  figlet -f smslant "TWITCH" | lolcat
+  sleep 1
+
+  ffmpeg \
+    -loglevel quiet \
+    -thread_queue_size 512 -f v4l2 -framerate 20 -video_size 320x240 -i /dev/video0 \
+    -thread_queue_size 512 -f x11grab -framerate 20 -video_size 1280x720 -i :0.0+150,90 \
+    -thread_queue_size 128 -loop 1 -i "$HOME/Pictures/bg_main.jpg" \
+    -thread_queue_size 512 -f pulse -ar 48000 -i alsa_output.pci-0000_00_1b.0.analog-stereo.monitor \
+    -thread_queue_size 512 -f pulse -ar 48000 -i alsa_input.usb-Burr-Brown_from_TI_USB_Audio_CODEC-00.analog-stereo \
+    -filter_complex "
+    [1:v]scale=-1:720:force_original_aspect_ratio=decrease,
+         pad=1280:720:(ow-iw)/2:(oh-ih):color=black[desk];
+    [0:v]scale=320x240,
+         chromakey=0x384b81:0.05:0.05[cam_keyed];
+    [2:v]scale=320x240[bg];
+    [bg][cam_keyed]overlay=0:0[cam_final];
+    [desk][cam_final]overlay=W-w-0:0[v];
+    [3:a]volume=1.0[a_sys];
+    [4:a]adelay=2000|2000,
+          pan=stereo|c0=c0|c1=c0,
+          volume=1.4[a_mic];
+    [a_sys][a_mic]amix=inputs=2:dropout_transition=0[a]
+    " \
+    -map "[v]" \
+    -map "[a]" \
+    -c:v libx264 \
+    -preset veryfast \
+    -pix_fmt yuv420p \
+    -b:v 2500k \
+    -g 60 \
+    -c:a aac \
+    -b:a 160k \
+    -ar 48000 \
+    -ac 2 \
+    -movflags +faststart \
+    -f flv -flvflags no_duration_filesize "$TWITCH_RTMP/$TWITCH_KEY"
+
+  clear
+  figlet -f small "Stream Over" | lolcat
+  sleep 1
+  clear
+}
+
+function kick_pip() {
+  : "${KICK_KEY:?KICK_KEY not set}"
+  : "${KICK_RTMP:?KICK_RTMP not set}"
+
+  figlet -f smslant "KICK" | lolcat
+  sleep 1
+
+  ffmpeg \
+    -loglevel quiet \
+    -thread_queue_size 512 -f v4l2 -framerate 20 -video_size 320x240 -i /dev/video0 \
+    -thread_queue_size 512 -f x11grab -framerate 20 -video_size 1280x720 -i :0.0+150,90 \
+    -thread_queue_size 128 -loop 1 -i "$HOME/Pictures/bg_main.jpg" \
+    -thread_queue_size 512 -f pulse -ar 48000 -i alsa_output.pci-0000_00_1b.0.analog-stereo.monitor \
+    -thread_queue_size 512 -f pulse -ar 48000 -i alsa_input.usb-Burr-Brown_from_TI_USB_Audio_CODEC-00.analog-stereo \
+    -filter_complex "
+    [1:v]scale=-1:720:force_original_aspect_ratio=decrease,
+         pad=1280:720:(ow-iw)/2:(oh-ih):color=black[desk];
+    [0:v]scale=320x240,
+         chromakey=0x384b81:0.05:0.05[cam_keyed];
+    [2:v]scale=320x240[bg];
+    [bg][cam_keyed]overlay=0:0[cam_final];
+    [desk][cam_final]overlay=W-w-0:0[v];
+    [3:a]volume=1.0[a_sys];
+    [4:a]adelay=2000|2000,
+          pan=stereo|c0=c0|c1=c0,
+          volume=1.4[a_mic];
+    [a_sys][a_mic]amix=inputs=2:dropout_transition=0[a]
+    " \
+    -map "[v]" \
+    -map "[a]" \
+    -c:v libx264 \
+    -preset veryfast \
+    -pix_fmt yuv420p \
+    -b:v 2500k \
+    -g 60 \
+    -c:a aac \
+    -b:a 160k \
+    -ar 48000 \
+    -ac 2 \
+    -movflags +faststart \
+    -f flv -flvflags no_duration_filesize "$KICK_RTMP/$KICK_KEY"
+
+    clear
+    figlet -f small "Stream Over" | lolcat
+    sleep 1
+    clear
+}
+
+#-------------------------------------------------------------------------//////////
+#------------------------------------------////////// Desktop/Webcam Local Recording
+#-------------------------------------------------------------------------//////////
+
+
+function desktop_short() {
+  OUTPUT="$HOME/Videos/desktop_short$(date +%Y%m%d_%H%M%S).mp4"
+
+  figlet -f smslant "Recording..." | lolcat
+  sleep 1
+
+  ffmpeg \
+  -loglevel quiet \
+  -thread_queue_size 128 -f v4l2 -framerate 20 -video_size 640x480 -i /dev/video0 \
+  -thread_queue_size 128 -f x11grab -framerate 20 -video_size 720x820 -i :0.0+430,80 \
+  -thread_queue_size 128 -loop 1 -i "$HOME/Pictures/bg_main.jpg" \
+  -thread_queue_size 512 -f pulse -ar 48000 -i alsa_output.pci-0000_00_1b.0.analog-stereo.monitor \
+  -thread_queue_size 512 -f pulse -ar 48000 -i alsa_input.usb-Burr-Brown_from_TI_USB_Audio_CODEC-00.analog-stereo \
+  -filter_complex "
+    [1:v]scale=-1:720:force_original_aspect_ratio=decrease,
+         pad=720:1280:(ow-iw)/2:(oh-ih):color=black[desk];
+    [0:v]scale=640:480,
+         chromakey=0x516ca0:0.05:0.05[cam_keyed];
+    [2:v]scale=640:480[bg];
+    [bg][cam_keyed]overlay=0:0[cam_final];
+    [desk][cam_final]overlay=40:40[v];
+    [3:a]volume=1.0[a_sys];
+    [4:a]adelay=1000|1000,
+          pan=stereo|c0=c0|c1=c0,
+          volume=1.4[a_mic];
+    [a_sys][a_mic]amix=inputs=2:dropout_transition=0[a]
+  " \
+  -map "[v]" \
+  -map "[a]" \
+  -c:v libx264 \
+  -preset veryfast \
+  -pix_fmt yuv420p \
+  -b:v 2500k \
+  -maxrate 2500k \
+  -bufsize 5000k \
+  -g 60 \
+  -level 4.1 \
+  -c:a aac \
+  -b:a 96k \
+  -ar 44100 \
+  -ac 2 \
+  -movflags +faststart \
+  "$OUTPUT"
+
+  clear
+  figlet -f small "Recording Over" | lolcat
+  sleep 1
+  clear
+}
+
+function desktop_pip() {
+  OUTPUT="$HOME/Videos/desktop_pip$(date +%Y%m%d_%H%M%S).mp4"
+
+  figlet -f smslant "Recording..." | lolcat
+  sleep 1
+
+  ffmpeg \
+    -loglevel quiet \
+    -thread_queue_size 512 -f v4l2 -framerate 20 -video_size 320x240 -i /dev/video0 \
+    -thread_queue_size 512 -f x11grab -framerate 20 -video_size 1280x720 -i :0.0+150,90 \
+    -thread_queue_size 128 -loop 1 -i "$HOME/Pictures/bg_main.jpg" \
+    -thread_queue_size 512 -f pulse -ar 48000 -i alsa_output.pci-0000_00_1b.0.analog-stereo.monitor \
+    -thread_queue_size 512 -f pulse -ar 48000 -i alsa_input.usb-Burr-Brown_from_TI_USB_Audio_CODEC-00.analog-stereo \
+    -filter_complex "
+    [1:v]scale=-1:720:force_original_aspect_ratio=decrease,
+         pad=1280:720:(ow-iw)/2:(oh-ih):color=black[desk];
+    [0:v]scale=320x240,
+         chromakey=0x384b81:0.05:0.05[cam_keyed];
+    [2:v]scale=320x240[bg];
+    [bg][cam_keyed]overlay=0:0[cam_final];
+    [desk][cam_final]overlay=W-w-0:0[v];
+    [3:a]volume=1.0[a_sys];
+    [4:a]adelay=2000|2000,
+          pan=stereo|c0=c0|c1=c0,
+          volume=1.4[a_mic];
+    [a_sys][a_mic]amix=inputs=2:dropout_transition=0[a]
+  " \
+    -map "[v]" \
+    -map "[a]" \
+    -c:v libx264 \
+    -preset veryfast \
+    -pix_fmt yuv420p \
+    -b:v 2500k \
+    -g 60 \
+    -c:a aac \
+    -b:a 160k \
+    -ar 48000 \
+    -ac 2 \
+    -movflags +faststart \
+    "$OUTPUT"
+
+  clear
+  figlet -f small "Recording Over" | lolcat
+  sleep 1
+  clear
+}

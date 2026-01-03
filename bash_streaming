@@ -211,15 +211,40 @@ function shortmaker_fullaudio() {
 #Or stream to Twitch, then download it and post it to YT. Either or.
 #I'll figure it out later.
 
-function youtube_pip() {
 
-  : "${YOUTUBE_KEY:?YOUTUBE_KEY not set}"
-  : "${YOUTUBE_RTMP:?YOUTUBE_RTMP not set}"
+function pip() {
+    # $1 is the streaming service: twitch, kick, youtube
+    SERVICE="$1"
 
-  figlet -f smslant "Youtube" | lolcat
-  sleep 1
+    case "$SERVICE" in
+        kick)
+            : "${KICK_KEY:?KICK_KEY not set}"
+            : "${KICK_RTMP:?KICK_RTMP not set}"
+            KEY="$KICK_KEY"
+            RTMP="$KICK_RTMP"
+            ;;
+        twitch)
+            : "${TWITCH_KEY:?TWITCH_KEY not set}"
+            : "${TWITCH_RTMP:?TWITCH_RTMP not set}"
+            KEY="$TWITCH_KEY"
+            RTMP="$TWITCH_RTMP"
+            ;;
+        yt|youtube)
+            : "${YOUTUBE_KEY:?YOUTUBE_KEY not set}"
+            : "${YOUTUBE_RTMP:?YOUTUBE_RTMP not set}"
+            KEY="$YOUTUBE_KEY"
+            RTMP="$YOUTUBE_RTMP"
+            ;;
+        *)
+            echo "Unknown service: $SERVICE"
+            return 1
+            ;;
+    esac
 
-  ffmpeg \
+    figlet -f smslant "$SERVICE" | lolcat
+    sleep 1
+
+    ffmpeg \
     -loglevel quiet \
     -thread_queue_size 512 -f v4l2 -framerate 20 -video_size 320x240 -i /dev/video0 \
     -thread_queue_size 512 -f x11grab -framerate 20 -video_size 1280x720 -i :0.0+150,90 \
@@ -233,9 +258,9 @@ function youtube_pip() {
          chromakey=0x384b81:0.05:0.05[cam_keyed];
     [2:v]scale=320x240[bg];
     [bg][cam_keyed]overlay=0:0[cam_final];
-    [desk][cam_final]overlay=W-w-0:0[v];
+    [desk][cam_final]overlay=0:H-h[v];
     [3:a]volume=1.0[a_sys];
-    [4:a]adelay=2000|2000,
+    [4:a]adelay=1000|1000,
           pan=stereo|c0=c0|c1=c0,
           volume=1.4[a_mic];
     [a_sys][a_mic]amix=inputs=2:dropout_transition=0[a]
@@ -252,111 +277,14 @@ function youtube_pip() {
     -ar 48000 \
     -ac 2 \
     -movflags +faststart \
-    -f flv -flvflags no_duration_filesize "$YOUTUBE_RTMP/$YOUTUBE_KEY"
-
-  clear
-  figlet -f small "Stream Over" | lolcat
-  sleep 1
-  clear
-}
-
-
-
-function twitch_pip() {
-  : "${TWITCH_KEY:?TWITCH_KEY not set}"
-  : "${TWITCH_RTMP:?TWITCH_RTMP not set}"
-
-  figlet -f smslant "TWITCH" | lolcat
-  sleep 1
-
-  ffmpeg \
-    -loglevel quiet \
-    -thread_queue_size 512 -f v4l2 -framerate 20 -video_size 320x240 -i /dev/video0 \
-    -thread_queue_size 512 -f x11grab -framerate 20 -video_size 1280x720 -i :0.0+150,90 \
-    -thread_queue_size 128 -loop 1 -i "$HOME/Pictures/bg_main.jpg" \
-    -thread_queue_size 512 -f pulse -ar 48000 -i alsa_output.pci-0000_00_1b.0.analog-stereo.monitor \
-    -thread_queue_size 512 -f pulse -ar 48000 -i alsa_input.usb-Burr-Brown_from_TI_USB_Audio_CODEC-00.analog-stereo \
-    -filter_complex "
-    [1:v]scale=-1:720:force_original_aspect_ratio=decrease,
-         pad=1280:720:(ow-iw)/2:(oh-ih):color=black[desk];
-    [0:v]scale=320x240,
-         chromakey=0x384b81:0.05:0.05[cam_keyed];
-    [2:v]scale=320x240[bg];
-    [bg][cam_keyed]overlay=0:0[cam_final];
-    [desk][cam_final]overlay=W-w-0:0[v];
-    [3:a]volume=1.0[a_sys];
-    [4:a]adelay=2000|2000,
-          pan=stereo|c0=c0|c1=c0,
-          volume=1.4[a_mic];
-    [a_sys][a_mic]amix=inputs=2:dropout_transition=0[a]
-    " \
-    -map "[v]" \
-    -map "[a]" \
-    -c:v libx264 \
-    -preset veryfast \
-    -pix_fmt yuv420p \
-    -b:v 2500k \
-    -g 60 \
-    -c:a aac \
-    -b:a 160k \
-    -ar 48000 \
-    -ac 2 \
-    -movflags +faststart \
-    -f flv -flvflags no_duration_filesize "$TWITCH_RTMP/$TWITCH_KEY"
-
-  clear
-  figlet -f small "Stream Over" | lolcat
-  sleep 1
-  clear
-}
-
-function kick_pip() {
-  : "${KICK_KEY:?KICK_KEY not set}"
-  : "${KICK_RTMP:?KICK_RTMP not set}"
-
-  figlet -f smslant "KICK" | lolcat
-  sleep 1
-
-  ffmpeg \
-    -loglevel quiet \
-    -thread_queue_size 512 -f v4l2 -framerate 20 -video_size 320x240 -i /dev/video0 \
-    -thread_queue_size 512 -f x11grab -framerate 20 -video_size 1280x720 -i :0.0+150,90 \
-    -thread_queue_size 128 -loop 1 -i "$HOME/Pictures/bg_main.jpg" \
-    -thread_queue_size 512 -f pulse -ar 48000 -i alsa_output.pci-0000_00_1b.0.analog-stereo.monitor \
-    -thread_queue_size 512 -f pulse -ar 48000 -i alsa_input.usb-Burr-Brown_from_TI_USB_Audio_CODEC-00.analog-stereo \
-    -filter_complex "
-    [1:v]scale=-1:720:force_original_aspect_ratio=decrease,
-         pad=1280:720:(ow-iw)/2:(oh-ih):color=black[desk];
-    [0:v]scale=320x240,
-         chromakey=0x384b81:0.05:0.05[cam_keyed];
-    [2:v]scale=320x240[bg];
-    [bg][cam_keyed]overlay=0:0[cam_final];
-    [desk][cam_final]overlay=W-w-0:0[v];
-    [3:a]volume=1.0[a_sys];
-    [4:a]adelay=2000|2000,
-          pan=stereo|c0=c0|c1=c0,
-          volume=1.4[a_mic];
-    [a_sys][a_mic]amix=inputs=2:dropout_transition=0[a]
-    " \
-    -map "[v]" \
-    -map "[a]" \
-    -c:v libx264 \
-    -preset veryfast \
-    -pix_fmt yuv420p \
-    -b:v 2500k \
-    -g 60 \
-    -c:a aac \
-    -b:a 160k \
-    -ar 48000 \
-    -ac 2 \
-    -movflags +faststart \
-    -f flv -flvflags no_duration_filesize "$KICK_RTMP/$KICK_KEY"
+    -f flv -flvflags no_duration_filesize "$RTMP/$KEY"
 
     clear
     figlet -f small "Stream Over" | lolcat
     sleep 1
     clear
 }
+
 
 #-------------------------------------------------------------------------//////////
 #------------------------------------------////////// Desktop/Webcam Local Recording
@@ -416,7 +344,8 @@ function desktop_short() {
 function desktop_pip() {
   OUTPUT="$HOME/Videos/desktop_pip$(date +%Y%m%d_%H%M%S).mp4"
 
-  figlet -f smslant "Recording..." | lolcat
+  figlet -f smslant "Recording..." | lolcat -a
+
   sleep 1
 
   ffmpeg \
@@ -433,7 +362,7 @@ function desktop_pip() {
          chromakey=0x384b81:0.05:0.05[cam_keyed];
     [2:v]scale=320x240[bg];
     [bg][cam_keyed]overlay=0:0[cam_final];
-    [desk][cam_final]overlay=W-w-0:0[v];
+    [desk][cam_final]overlay=0:H-h[v];
     [3:a]volume=1.0[a_sys];
     [4:a]adelay=2000|2000,
           pan=stereo|c0=c0|c1=c0,

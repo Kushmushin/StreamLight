@@ -54,7 +54,7 @@ To add user security, enter:
 
 Add the following to your .bashrc file in your $HOME dir. The spot for it is near the bottom.
 
-# My bash_streaming is hidden with the period. Add or remove where applicable. I keep all my bash files hidden.
+#My bash_streaming is hidden with the period. Add or remove where applicable. I keep all my bash files hidden.
 if [ -f ~/.bash_streaming ]; then
     . ~/.bash_streaming
 fi
